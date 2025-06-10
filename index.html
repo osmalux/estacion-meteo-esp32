@@ -541,7 +541,7 @@ function updateForecast(tempsRaw, humsRaw, presRaw, ext) {
   const avgEarlierP = avg(earlierP);
   const diffP = avgNowP - avgEarlierP;
 
-  const avg24hP = avg(pres.slice(-1440));
+  const avg24hP = avg(pres.slice(-2880));
   const trendP = pres[pres.length - 1] - avg24hP;
 
   const avgTemp = avg(temps.slice(-60));
@@ -576,9 +576,9 @@ function updateForecast(tempsRaw, humsRaw, presRaw, ext) {
     }
   }
 
-  if (trendP > 5) {
+  if (trendP > 3) {
     rules.push({ cond: true, label: 'Tendencia: Subida de presión ☀️', icon: 'fas fa-arrow-up', priority: 6 });
-  } else if (trendP < -5) {
+  } else if (trendP < -3) {
     rules.push({ cond: true, label: 'Tendencia: Caída de presión 🌧️', icon: 'fas fa-arrow-down', priority: 6 });
   }
 
