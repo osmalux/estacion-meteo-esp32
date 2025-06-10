@@ -541,7 +541,7 @@ function updateForecast(tempsRaw, humsRaw, presRaw, ext) {
   const avgEarlierP = avg(earlierP);
   const diffP = avgNowP - avgEarlierP;
 
-  const avg24hP = avg(pres.slice(-2880));
+  const avg24hP = avg(pres.slice(-288));
   const trendP = pres[pres.length - 1] - avg24hP;
 
   const avgTemp = avg(temps.slice(-60));
