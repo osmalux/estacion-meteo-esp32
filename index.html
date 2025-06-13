@@ -582,6 +582,23 @@ function updateForecast(tempsRaw, humsRaw, presRaw, ext) {
     rules.push({ cond: true, label: 'Tendencia: Caída de presión 🌧️', icon: 'fas fa-arrow-down', priority: 6 });
   }
 
+const suddenDropPrev = pres.slice(-24, -12); // hora anterior
+const suddenDropNow = pres.slice(-12);       // última hora
+
+if (suddenDropPrev.length >= 10 && suddenDropNow.length >= 10) {
+  const drop = avg(suddenDropPrev) - avg(suddenDropNow);
+  const PRESSURE_DROP_THRESHOLD = 3;
+
+  if (drop >= PRESSURE_DROP_THRESHOLD) {
+    rules.push({
+      cond: true,
+      label: 'Caída brusca de presión 🌩️',
+      icon: 'fas fa-bolt',
+      priority: 6
+    });
+  }
+}
+	
   const result = rules.filter(r => r.cond).sort((a, b) => b.priority - a.priority)[0];
 
   if (result) {
