@@ -1,18 +1,24 @@
-﻿
+
+
 <!DOCTYPE html>
 
 <html lang="es">
 <head>
+
 <style>
   .u-tooltip, .u-legend, .u-labels, .u-series-legend, .u-inline-legend {
     display: none !important;
   }
 </style>
+
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <meta name="theme-color" content="#1c6dd0"/>
 <title>Estación Meteorológica</title>
 <link href="https://cdn.jsdelivr.net/npm/uplot@1.6.17/dist/uPlot.min.css" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.17/dist/uPlot.iife.min.js">
+
+
 </script>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet"/>
 <style>
@@ -35,6 +41,8 @@
     }
     
 .card {
+    min-height: 160px;
+    min-width: 160px;
   color: white;
   border-radius: 20px;
   background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(0,0,0,0.4));
@@ -112,6 +120,9 @@
       height: 400px;
     }
     #volver {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
       padding: 10px 20px;
       font-size: 1rem;
       margin-bottom: 20px;
@@ -169,18 +180,28 @@
 <div class="value" id="val-field7">--</div>
 <div class="unit">%</div>
 <div class="value" id="voltaje-field7" style="font-size: 1.2em; font-weight: bold;">-- V</div></div>
+</div>
+
 <div class="card" id="forecast-card" style="background: linear-gradient(145deg, #6d6875, #9a8c98); box-shadow: 12px 12px 30px rgba(0, 0, 0, 0.7), -12px -12px 30px rgba(255, 255, 255, 0.1), inset 4px 4px 8px rgba(255,255,255,0.06), inset -4px -4px 8px rgba(0,0,0,0.5);">
-<i class="fas fa-cloud-sun" id="forecastIcon"></i>
-<h3>Pronóstico</h3>
-<div class="value" id="forecast">--</div>
+  <i class="fas fa-cloud-sun" id="forecastIcon"></i>
+  <h3>Pronóstico</h3>
+  <div class="value" id="forecast">--</div>
 <div class="confidence" id="forecastConfidence" style="font-size: 0.9em; margin-top: 6px; color: #222;">--</div>
 </div>
+
 </div>
-<div style="text-align: center; margin: 10px 0;">Última actualización: <span id="last-update-time">--</span></div>
+<div style="text-align: center; margin: 10px 0; font-size: 1rem; color: white;">
+  <div>Última actualización: <span id="last-update-time">--</span></div>
+  <div>Última actualización externa: <span id="external-update-time">--</span></div>
+</div>
+
+
+
 </div>
 <div id="graphSection">
 <button id="volver" onclick="toggleView()">Volver</button>
 <h2 id="titulo">Gráfica</h2>
+
 <div id="graphControls" style="display: flex; justify-content: center; gap: 16px; margin: 20px 0;">
 <div style="background: rgba(255,255,255,0.15); padding: 10px 20px; border-radius: 12px; backdrop-filter: blur(6px); box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
 <button id="prevGraph" style="padding: 10px 20px; font-size: 1rem; font-weight: bold; border-radius: 8px; border: none; background: #ffffff; color: #000; cursor: pointer;">⏪ Anterior</button>
@@ -192,16 +213,23 @@
 <button id="nextGraph" style="padding: 10px 20px; font-size: 1rem; font-weight: bold; border-radius: 8px; border: none; background: #ffffff; color: #000; cursor: pointer;">Siguiente ⏩</button>
 </div>
 </div>
-<div id="tituloGraficaExterior" style="
+
+
+        <div id="tituloGraficaExterior" style="
           text-align: center;
           margin: 10px auto 20px;
           font-size: 1.4rem;
           font-weight: bold;
           color: #111;
         "></div>
-<div id="chart"></div>
+        
+        <div id="chart"></div>
 <div id="customLegend" style="text-align:center; margin-top: 10px; font-size: 1rem; color: black;"><strong>Hora:</strong> <span id="legend-time">--:--</span> | <strong>Valor:</strong> <span id="legend-value">--</span></div>
-<div style="
+        
+        
+        
+
+    <div style="
       text-align: center;
       margin-top: 20px;
       font-size: 1.1rem;
@@ -214,8 +242,9 @@
       margin-right: auto;
       box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     ">
-<span id="last-graph-update">--</span>
-</div>
+      <span id="last-graph-update">--</span>
+    </div>
+    
 </div>
 <script>
     const fieldInfo = {
@@ -227,6 +256,7 @@
       field6: { label: "RPM", color: "#ff6b6b" },
       field7: { label: "Batería", color: "#e63946" }
     };
+let lastExternalForecast = null;
 
     const channelID = "2927898";
     const readAPIKey = "4J1AD2A92WHSQWA";
@@ -529,20 +559,31 @@ document.getElementById("graphSection").style.display = "block";
     
 function updateForecast(tempsRaw, humsRaw, presRaw, ext) {
   const clean = arr => arr.filter(v => !isNaN(v) && v > -100 && v < 1000);
-  const avg = arr => clean(arr).reduce((a, b) => a + b, 0) / clean(arr).length;
+  const avg = arr => {
+    const cleaned = clean(arr);
+    return cleaned.length ? cleaned.reduce((a, b) => a + b, 0) / cleaned.length : NaN;
+  };
 
   const temps = clean(tempsRaw);
   const hums = clean(humsRaw);
   const pres = clean(presRaw);
+    const lastValidPressure = pres.slice().reverse().find(p => !isNaN(p));
+  const pres24h = pres.slice(-288).filter(p => !isNaN(p));
 
   const nowP = pres.slice(-60);
   const earlierP = pres.slice(-120, -60);
-  const avgNowP = avg(nowP);
-  const avgEarlierP = avg(earlierP);
-  const diffP = avgNowP - avgEarlierP;
 
-  const avg24hP = avg(pres.slice(-96));
-  const trendP = pres[pres.length - 1] - avg24hP;
+  let avgNowP = NaN;
+  let avgEarlierP = NaN;
+  let diffP = 0;
+
+  if (nowP.length > 10 && earlierP.length > 10) {
+    avgNowP = avg(nowP);
+    avgEarlierP = avg(earlierP);
+    if (!isNaN(avgNowP) && !isNaN(avgEarlierP)) {
+      diffP = avgNowP - avgEarlierP;
+    }
+  }
 
   const avgTemp = avg(temps.slice(-60));
   const avgHum = avg(hums.slice(-60));
@@ -550,56 +591,65 @@ function updateForecast(tempsRaw, humsRaw, presRaw, ext) {
   let forecastText = '--';
   let icon = 'fas fa-question';
 
-  const rules = [
+  const sensorRules = [
     { cond: avgNowP < 985 && avgTemp <= 2, label: 'Nieve ❄️', icon: 'fas fa-snowflake', priority: 5 },
     { cond: avgNowP < 990 && avgTemp <= 5, label: 'Granizo 🌨️', icon: 'fas fa-icicles', priority: 4 },
     { cond: avgTemp < 8 && avgHum > 90 && avgNowP < 1000, label: 'Niebla 🌫️', icon: 'fas fa-smog', priority: 3 },
     { cond: avgTemp >= 25 && avgHum <= 35 && avgNowP > 1010, label: 'Calor seco 🔥', icon: 'fas fa-temperature-high', priority: 3 },
     { cond: avgHum >= 85 && avgNowP > 1015, label: 'Bochorno 🥵', icon: 'fas fa-water', priority: 2 },
-	{ cond: avgNowP > 1015 && avgHum < 75, label: 'Estable / Despejado ☀️', icon: 'fas fa-sun', priority: 2 },
+    { cond: avgNowP > 1015 && avgHum < 75, label: 'Estable / Despejado ☀️', icon: 'fas fa-sun', priority: 2 },
     { cond: diffP > 1.5 && avgNowP > 1010, label: 'Despejado ☀️', icon: 'fas fa-sun', priority: 1 },
     { cond: diffP < -1.5 && avgNowP < 1000, label: 'Lluvia 🌧️', icon: 'fas fa-cloud-showers-heavy', priority: 4 },
     { cond: avgNowP >= 1000 && avgNowP <= 1010 && avgHum >= 60, label: 'Cubierto ☁️', icon: 'fas fa-cloud', priority: 2 }
   ];
 
-  
+  const trendRules = [];
+
+
+
+  if (pres24h.length > 180 && lastValidPressure !== undefined) {
+    const avg24hP = avg(pres24h);
+    const trendP = lastValidPressure - avg24hP;
+
+    if (trendP < -1.5) {
+      trendRules.push({ cond: true, label: 'Tendencia: Caída de presión 🌧️', icon: 'fas fa-arrow-down', priority: 6 });
+    } else if (trendP > 1.5) {
+      trendRules.push({ cond: true, label: 'Tendencia: Subida de presión ☀️', icon: 'fas fa-arrow-up', priority: 6 });
+    }
+
+    const suddenDropPrev = pres.slice(-24, -12);
+    const suddenDropNow = pres.slice(-12);
+
+    if (suddenDropPrev.length >= 10 && suddenDropNow.length >= 10) {
+      const drop = avg(suddenDropPrev) - avg(suddenDropNow);
+      const PRESSURE_DROP_THRESHOLD = 3;
+
+      if (drop >= PRESSURE_DROP_THRESHOLD) {
+        trendRules.push({
+          cond: true,
+          label: 'Caída brusca de presión 🌩️',
+          icon: 'fas fa-bolt',
+          priority: 6
+        });
+      }
+    }
+  }
+
+  const externalRules = [];
   if (ext) {
-    console.log("🌤️ Datos externos recibidos:", ext);
     if (ext.main === "Clear") {
-      rules.push({ cond: true, label: 'Despejado ☀️', icon: 'fas fa-sun', priority: 5 });
+      externalRules.push({ cond: true, label: 'Despejado ☀️', icon: 'fas fa-sun', priority: 5 });
     }
     if (ext.main === "Rain") {
-      rules.push({ cond: true, label: 'Lluvia 🌧️', icon: 'fas fa-cloud-showers-heavy', priority: 5 });
+      externalRules.push({ cond: true, label: 'Lluvia 🌧️', icon: 'fas fa-cloud-showers-heavy', priority: 5 });
     }
     if (ext.main === "Clouds" && ext.humidity > 70) {
-      rules.push({ cond: true, label: 'Nublado ☁️', icon: 'fas fa-cloud', priority: 5 });
+      externalRules.push({ cond: true, label: 'Nublado ☁️', icon: 'fas fa-cloud', priority: 5 });
     }
   }
 
-  if (trendP > 1.5) {
-    rules.push({ cond: true, label: 'Tendencia: Subida de presión ☀️', icon: 'fas fa-arrow-up', priority: 6 });
-  } else if (trendP < -1.5) {
-    rules.push({ cond: true, label: 'Tendencia: Caída de presión 🌧️', icon: 'fas fa-arrow-down', priority: 6 });
-  }
-
-const suddenDropPrev = pres.slice(-24, -12); // hora anterior
-const suddenDropNow = pres.slice(-12);       // última hora
-
-if (suddenDropPrev.length >= 10 && suddenDropNow.length >= 10) {
-  const drop = avg(suddenDropPrev) - avg(suddenDropNow);
-  const PRESSURE_DROP_THRESHOLD = 3;
-
-  if (drop >= PRESSURE_DROP_THRESHOLD) {
-    rules.push({
-      cond: true,
-      label: 'Caída brusca de presión 🌩️',
-      icon: 'fas fa-bolt',
-      priority: 6
-    });
-  }
-}
-	
-  const result = rules.filter(r => r.cond).sort((a, b) => b.priority - a.priority)[0];
+  const allRules = [...sensorRules, ...trendRules, ...externalRules];
+  const result = allRules.filter(r => r.cond).sort((a, b) => b.priority - a.priority)[0];
 
   if (result) {
     forecastText = result.label;
@@ -615,14 +665,12 @@ if (suddenDropPrev.length >= 10 && suddenDropNow.length >= 10) {
   let sensorPrediction = null;
   let externalPrediction = null;
 
-  const internalRules = rules.filter(r => r.priority !== 5);
-  const externalRules = rules.filter(r => r.priority === 5);
-
+  const internalRules = [...sensorRules, ...trendRules];
   if (internalRules.length > 0) {
-    sensorPrediction = internalRules.sort((a, b) => b.priority - a.priority)[0].label;
+    sensorPrediction = internalRules.sort((a, b) => b.priority - a.priority)[0]?.label;
   }
-  if (ext && externalRules.length > 0) {
-    externalPrediction = externalRules[0].label;
+  if (externalRules.length > 0) {
+    externalPrediction = externalRules[0]?.label;
   }
 
   let confidence = "🤝 Coincidencia media";
@@ -636,19 +684,25 @@ if (suddenDropPrev.length >= 10 && suddenDropNow.length >= 10) {
   }
 
   document.getElementById('forecastConfidence').textContent = confidence;
-
 }
+
 
 
     // Cargar datos principales
     
 function fetchExternalForecast(callback) {
+  console.log("📡 Intentando obtener datos de OpenWeatherMap...");
+
   fetch('https://api.openweathermap.org/data/2.5/weather?lat=40.4168&lon=-3.7038&appid=7f897dc14960f59d1b137734d8133e70&units=metric&lang=es')
     .then(res => {
-      if (!res.ok) throw new Error('Código HTTP ' + res.status);
+      console.log("🔍 Respuesta recibida de OpenWeatherMap:", res.status);
+      if (!res.ok) {
+        throw new Error('Respuesta no OK. Código HTTP: ' + res.status);
+      }
       return res.json();
     })
     .then(data => {
+      console.log("🌤️ Datos externos recibidos:", data);
       const extForecast = {
         description: data.weather[0].description,
         main: data.weather[0].main,
@@ -660,7 +714,7 @@ function fetchExternalForecast(callback) {
       callback(extForecast);
     })
     .catch(err => {
-      console.error('❌ Error al obtener datos de OpenWeatherMap:', err.message);
+      console.error('❌ Error al obtener datos de OpenWeatherMap:', err);
       callback(null);
     });
 }
@@ -676,13 +730,11 @@ function actualizarDashboard() {
             const val = parseFloat(ultima["field" + i]);
             if (el && !isNaN(val)) el.textContent = val.toFixed(1);
           }
-
-        const voltaje = parseFloat(ultima.field8);
+		   const voltaje = parseFloat(ultima.field8);
         const voltEl = document.getElementById("voltaje-field7");
         if (voltEl && !isNaN(voltaje)) {
             voltEl.textContent = voltaje.toFixed(2) + " V";
         }
-                
           const lastUpdate = new Date(ultima.created_at).toLocaleString("es-ES", {
             hour: "2-digit", minute: "2-digit", second: "2-digit",
             day: "2-digit", month: "2-digit", year: "numeric",
@@ -697,7 +749,9 @@ function actualizarDashboard() {
               const temps = feeds.map(f => parseFloat(f.field1));
               const hums = feeds.map(f => parseFloat(f.field2));
               const pres = feeds.map(f => parseFloat(f.field3));
-              fetchExternalForecast(ext => updateForecast(temps, hums, pres, ext));
+             // fetchExternalForecast(ext => updateForecast(temps, hums, pres, ext));
+			 updateForecast(temps, hums, pres, lastExternalForecast);
+
             });
 
         });
@@ -718,6 +772,30 @@ function actualizarDashboard() {
         }
       }
     }
+function actualizarPronosticoExterno() {
+  console.log("📡 Intentando obtener datos de OpenWeatherMap...");
+  fetchExternalForecast(ext => {
+    if (ext) {
+      lastExternalForecast = ext;
+      console.log("✅ Pronóstico externo actualizado");
+
+      // Mostrar hora de actualización externa
+      const horaExt = new Date().toLocaleTimeString("es-ES", {
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+        timeZone: "Europe/Madrid"
+      });
+      const elExt = document.getElementById("external-update-time");
+      if (elExt) elExt.textContent = horaExt;
+    } else {
+      console.warn("⚠️ No se pudo actualizar el pronóstico externo");
+    }
+  });
+}
+
+
+actualizarPronosticoExterno(); // Primera llamada inmediata
+setInterval(actualizarPronosticoExterno, 300000); // Cada 5 minutos (300.000 ms)
+
 
     document.getElementById("prevGraph").addEventListener("click", () => {
       updateCurrentFieldIndexFromClickedCard();
