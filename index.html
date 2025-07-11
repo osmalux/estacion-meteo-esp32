@@ -1,0 +1,1051 @@
+﻿
+<!DOCTYPE html>
+
+<html lang="es">
+<head>
+
+<style>
+  .u-tooltip, .u-legend, .u-labels, .u-series-legend, .u-inline-legend {
+    display: none !important;
+  }
+</style>
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <meta name="theme-color" content="#1c6dd0"/>
+<title>Estación Meteorológica</title>
+<link href="https://cdn.jsdelivr.net/npm/uplot@1.6.17/dist/uPlot.min.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.17/dist/uPlot.iife.min.js">
+
+
+
+function mostrarResumen() {
+  document.getElementById("dashboard").style.display = "none";
+  document.getElementById("graphSection").style.display = "none";
+  document.getElementById("resumenSection").style.display = "block";
+  document.getElementById("fieldSelectorResumen").selectedIndex = 0;
+  document.getElementById("fieldSelectorResumen").dispatchEvent(new Event("change"));
+}
+
+function volverDesdeResumen() {
+  document.getElementById("dashboard").style.display = "block";
+  document.getElementById("resumenSection").style.display = "none";
+}
+
+document.getElementById("fieldSelectorResumen").addEventListener("change", function () {
+  const field = this.value;
+  const type = fieldInfo[field];
+  if (!type) return;
+
+  const now = new Date();
+  const endTime = now.toISOString();
+  const startTime = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const url = `https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&start=${startTime}&end=${endTime}`;
+
+  fetch(url)
+    .then(res => res.json())
+    .then(json => {
+      const feeds = json.feeds || [];
+      const grouped = {};
+
+      feeds.forEach(feed => {
+        const val = parseFloat((feed[field] || "").replace(",", "."));
+        if (isNaN(val)) return;
+        const dateStr = feed.created_at.substring(0, 10);
+        if (!grouped[dateStr]) grouped[dateStr] = [];
+        grouped[dateStr].push(val);
+      });
+
+      const dates = Object.keys(grouped).sort();
+      const maxVals = dates.map(d => Math.max(...grouped[d]));
+      const minVals = dates.map(d => Math.min(...grouped[d]));
+      const timestamps = dates.map(d => new Date(d).getTime());
+
+      if (window.resumenPlot) {
+        window.resumenPlot.destroy();
+        document.getElementById("chartResumen").innerHTML = "";
+      }
+
+      const opts = {
+        width: document.getElementById("chartResumen").clientWidth,
+        height: 400,
+        background: "#fff",
+        axes: [
+          {
+            stroke: "#000",
+            grid: { show: true },
+            values: (u, ticks) => ticks.map(t => {
+              const d = new Date(t);
+              return d.toLocaleDateString("es-ES", { day: '2-digit', month: '2-digit' });
+            })
+          },
+          { stroke: "#000", grid: { show: true } }
+        ],
+        scales: { x: { time: true }, y: { auto: true } },
+        series: [
+          {},
+          { label: "Máximas", stroke: "#e74c3c", width: 2 },
+          { label: "Mínimas", stroke: "#3498db", width: 2 }
+        ],
+        plugins: [{
+          hooks: {
+            setCursor: [
+              u => {
+                const idx = u.cursor.idx;
+                if (idx == null) return;
+                const ts = u.data[0][idx];
+                const max = u.data[1][idx];
+                const min = u.data[2][idx];
+                const d = new Date(ts);
+                document.getElementById("legendResumen-time").textContent = d.toLocaleDateString("es-ES");
+                document.getElementById("legendResumen-max").textContent = max?.toFixed(1) || "--";
+                document.getElementById("legendResumen-min").textContent = min?.toFixed(1) || "--";
+              }
+            ]
+          }
+        }]
+      };
+
+      window.resumenPlot = new uPlot(opts, [timestamps, maxVals, minVals], document.getElementById("chartResumen"));
+    });
+});
+
+</script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet"/>
+<style>
+    body {
+      background: linear-gradient(135deg, #0f2027, #1c6dd0, #00c6ff);
+      color: #fff;
+      font-family: 'Arial', sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      text-align: center;
+      padding: 16px;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 24px;
+      padding: 16px;
+    }
+    
+.card {
+    min-height: 160px;
+    min-width: 160px;
+  color: white;
+  border-radius: 20px;
+  background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(0,0,0,0.4));
+  width: 160px;
+  padding: 24px !important;
+  text-align: center;
+  margin: 10px !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.2),
+              0 4px 30px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card h3,
+.card .value,
+.card .unit,
+.card i {
+  color: #000 !important;
+  text-shadow: 1px 1px 3px rgba(255, 255, 255, 0.4);
+}
+
+.card h3 {
+  font-size: 1.6em;
+  font-weight: bold;
+  margin-bottom: 12px;
+  text-shadow: 1px 1px 3px rgba(255, 255, 255, 0.7);
+}
+
+.card .value {
+  font-size: clamp(1.2em, 2.5vw, 1.6em);
+  font-weight: bold;
+  margin-bottom: 8px;
+  text-shadow: 2px 2px 4px rgba(255, 255, 255, 0.5);
+  overflow-wrap: break-word;
+}
+
+.card .unit {
+  font-size: clamp(1em, 2vw, 1.3em);
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-shadow: 1px 1px 3px rgba(255, 255, 255, 0.4);
+  overflow-wrap: break-word;
+}
+
+.card i {
+  font-size: 3.4em;
+  margin-bottom: 16px;
+  text-shadow: 2px 2px 4px rgba(255, 255, 255, 0.6);
+}
+
+.card.clicked {
+  outline: 3px solid #ffeb3b;
+  outline-offset: -3px;
+  box-shadow: 0 0 10px #ffeb3b, 0 0 20px #ffeb3b;
+  transition: outline 0.2s ease, box-shadow 0.2s ease;
+}
+
+    .card.clicked {
+      outline: 3px solid #ffeb3b;
+      box-shadow: 0 0 10px #ffeb3b, 0 0 20px #ffeb3b;
+    }
+    .value, .unit {
+      font-weight: bold;
+    }
+    #graphSection {
+      display: none;
+      padding: 20px;
+      background-color: white;
+      color: black;
+    }
+    #chart {
+      width: 100%;
+      height: 400px;
+    }
+    #volver {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+      padding: 10px 20px;
+      font-size: 1rem;
+      margin-bottom: 20px;
+      background-color: #1c6dd0;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+<h1>Estación Meteorológica</h1>
+<div id="dashboard">
+<div class="cards">
+<div class="card" data-field="field1" style="background: linear-gradient(145deg, #2c3e50, #34495e); box-shadow: 12px 12px 30px rgba(0, 0, 0, 0.7), -12px -12px 30px rgba(255, 255, 255, 0.1), inset 4px 4px 8px rgba(255,255,255,0.06), inset -4px -4px 8px rgba(0,0,0,0.5);">
+<i class="fas fa-thermometer-half"></i>
+<h3>Temperatura</h3>
+<div class="value" id="val-field1">--</div>
+<div class="unit">°C</div>
+</div>
+<div class="card" data-field="field2" style="background: linear-gradient(145deg, #3a5068, #5bc0be); box-shadow: 12px 12px 30px rgba(0, 0, 0, 0.7), -12px -12px 30px rgba(255, 255, 255, 0.1), inset 4px 4px 8px rgba(255,255,255,0.06), inset -4px -4px 8px rgba(0,0,0,0.5);">
+<i class="fas fa-tint"></i>
+<h3>Humedad</h3>
+<div class="value" id="val-field2">--</div>
+<div class="unit">%</div>
+</div>
+<div class="card" data-field="field3" style="background: linear-gradient(145deg, #d4af37, #f0c808); box-shadow: 12px 12px 30px rgba(0, 0, 0, 0.7), -12px -12px 30px rgba(255, 255, 255, 0.1), inset 4px 4px 8px rgba(255,255,255,0.06), inset -4px -4px 8px rgba(0,0,0,0.5);">
+<i class="fas fa-tachometer-alt"></i>
+<h3>Presión</h3>
+<div class="value" id="val-field3">--</div>
+<div class="unit">hPa</div>
+</div>
+<div class="card" data-field="field4" style="background: linear-gradient(145deg, #00b4d8, #0077b6); box-shadow: 12px 12px 30px rgba(0, 0, 0, 0.7), -12px -12px 30px rgba(255, 255, 255, 0.1), inset 4px 4px 8px rgba(255,255,255,0.06), inset -4px -4px 8px rgba(0,0,0,0.5);">
+<i class="fas fa-mountain"></i>
+<h3>Altitud</h3>
+<div class="value" id="val-field4">--</div>
+<div class="unit">m</div>
+</div>
+<div class="card" data-field="field5" style="background: linear-gradient(145deg, #4a4e69, #22223b); box-shadow: 12px 12px 30px rgba(0, 0, 0, 0.7), -12px -12px 30px rgba(255, 255, 255, 0.1), inset 4px 4px 8px rgba(255,255,255,0.06), inset -4px -4px 8px rgba(0,0,0,0.5);">
+<i class="fas fa-wind"></i>
+<h3>Viento</h3>
+<div class="value" id="val-field5">--</div>
+<div class="unit">km/h</div>
+</div>
+<div class="card" data-field="field6" style="background: linear-gradient(145deg, #ff6b6b, #ff8e72); box-shadow: 12px 12px 30px rgba(0, 0, 0, 0.7), -12px -12px 30px rgba(255, 255, 255, 0.1), inset 4px 4px 8px rgba(255,255,255,0.06), inset -4px -4px 8px rgba(0,0,0,0.5);">
+<i class="fas fa-cogs"></i>
+<h3>RPM</h3>
+<div class="value" id="val-field6">--</div>
+<div class="unit"></div>
+</div>
+<div class="card" data-field="field7" style="background: linear-gradient(145deg, #e63946, #a4161a); box-shadow: 12px 12px 30px rgba(0, 0, 0, 0.7), -12px -12px 30px rgba(255, 255, 255, 0.1), inset 4px 4px 8px rgba(255,255,255,0.06), inset -4px -4px 8px rgba(0,0,0,0.5);">
+<i class="fas fa-battery-half"></i>
+<h3>Batería</h3>
+<div class="value" id="val-field7">--</div>
+<div class="unit">%</div>
+<div class="value" id="voltaje-field7" style="font-size: 1.2em; font-weight: bold;">-- V</div></div>
+</div>
+
+
+<div class="card" id="resumen-card" onclick="mostrarResumen()" style="
+  background: linear-gradient(145deg, #9d4edd, #7b2cbf);
+  box-shadow: inset 4px 4px 8px rgba(255,255,255,0.05),
+              inset -4px -4px 8px rgba(0,0,0,0.5),
+              12px 12px 30px rgba(0,0,0,0.6),
+              -12px -12px 30px rgba(255,255,255,0.05);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;">
+  <i class="fas fa-chart-bar" style="font-size: 2em; margin-bottom: 10px;"></i>
+  <h3 style="text-align:center;">Máx / Mín<br>30 días</h3>
+  <div style="margin-top: 8px;">📊</div>
+</div>
+
+<div class="card" id="forecast-card" style="background: linear-gradient(145deg, #6d6875, #9a8c98); box-shadow: 12px 12px 30px rgba(0, 0, 0, 0.7), -12px -12px 30px rgba(255, 255, 255, 0.1), inset 4px 4px 8px rgba(255,255,255,0.06), inset -4px -4px 8px rgba(0,0,0,0.5);">
+  <i class="fas fa-cloud-sun" id="forecastIcon"></i>
+  <h3>Pronóstico</h3>
+  <div class="value" id="forecast">--</div>
+<div class="confidence" id="forecastConfidence" style="font-size: 0.9em; margin-top: 6px; color: #222;">--</div>
+</div>
+
+</div>
+<div style="text-align: center; margin: 10px 0; font-size: 1rem; color: white;">
+  <div>Última actualización: <span id="last-update-time">--</span></div>
+  <div>Última actualización externa: <span id="external-update-time">--</span></div>
+</div>
+
+
+
+
+<div id="resumenSection" style="display:none; padding: 20px; background-color: white; color: black;">
+  <button onclick="volverDesdeResumen()" style="background-color:#1c6dd0; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer;">Volver</button>
+  
+  <div style="text-align:center;"><select id="fieldSelectorResumen" style="margin: 20px auto; font-size: 1.1rem; padding: 8px 16px; border-radius: 8px; border: 1px solid #ccc; background: #f0f0f0; display:inline-block;">
+    <option value="field1">🌡️ Temperatura</option>
+    <option value="field2">💧 Humedad</option>
+    <option value="field3">🌬️ Presión</option>
+    <option value="field4">🗻 Altitud</option>
+    <option value="field5">🌪️ Viento</option>
+    <option value="field6">⚙️ RPM</option>
+    <option value="field7">🔋 Batería</option>
+  </select></div>
+  <h2 style="text-align:center; margin-bottom: 10px;">Máximas y Mínimas</h2>
+  <div id="chartResumen" style="width:100%; height:400px;"></div>
+  <div style="text-align:center; margin-top:10px;">
+    <strong>Fecha:</strong> <span id="legendResumen-time">--</span>
+    <strong>Max:</strong> <span id="legendResumen-max">--</span>
+    <strong>Min:</strong> <span id="legendResumen-min">--</span>
+  </div>
+</div>
+
+<div id="graphSection">
+<button id="volver" onclick="toggleView()">Volver</button>
+<h2 id="titulo">Gráfica</h2>
+
+<div id="graphControls" style="display: flex; justify-content: center; gap: 16px; margin: 20px 0;">
+<div style="background: rgba(255,255,255,0.15); padding: 10px 20px; border-radius: 12px; backdrop-filter: blur(6px); box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+<button id="prevGraph" style="padding: 10px 20px; font-size: 1rem; font-weight: bold; border-radius: 8px; border: none; background: #ffffff; color: #000; cursor: pointer;">⏪ Anterior</button>
+</div>
+<div style="background: rgba(255,255,255,0.15); padding: 10px 20px; border-radius: 12px; backdrop-filter: blur(6px); box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+<button id="resetZoom" style="padding: 10px 20px; font-size: 1rem; font-weight: bold; border-radius: 8px; border: none; background: #f9f9f9; color: #333; cursor: pointer;">🔄 Restablecer Zoom</button>
+</div>
+<div style="background: rgba(255,255,255,0.15); padding: 10px 20px; border-radius: 12px; backdrop-filter: blur(6px); box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+<button id="nextGraph" style="padding: 10px 20px; font-size: 1rem; font-weight: bold; border-radius: 8px; border: none; background: #ffffff; color: #000; cursor: pointer;">Siguiente ⏩</button>
+</div>
+</div>
+
+
+        <div id="tituloGraficaExterior" style="
+          text-align: center;
+          margin: 10px auto 20px;
+          font-size: 1.4rem;
+          font-weight: bold;
+          color: #111;
+        "></div>
+        
+        <div id="chart"></div>
+<div id="customLegend" style="text-align:center; margin-top: 10px; font-size: 1rem; color: black;"><strong>Hora:</strong> <span id="legend-time">--:--</span> | <strong>Valor:</strong> <span id="legend-value">--</span></div>
+        
+        
+        
+
+    <div style="
+      text-align: center;
+      margin-top: 20px;
+      font-size: 1.1rem;
+      color: #222;
+      background: rgba(255,255,255,0.8);
+      padding: 10px 20px;
+      border-radius: 10px;
+      width: fit-content;
+      margin-left: auto;
+      margin-right: auto;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    ">
+      <span id="last-graph-update">--</span>
+    </div>
+    
+</div>
+<script>
+    const fieldInfo = {
+      field1: { label: "Temperatura", color: "#2c3e50" },
+      field2: { label: "Humedad", color: "#3a5068" },
+      field3: { label: "Presión", color: "#d4af37" },
+      field4: { label: "Altitud", color: "#00b4d8" },
+      field5: { label: "Viento", color: "#4a4e69" },
+      field6: { label: "RPM", color: "#ff6b6b" },
+      field7: { label: "Batería", color: "#e63946" }
+    };
+let lastExternalForecast = null;
+
+    const channelID = "2927898";
+    const readAPIKey = "4J1AD2A92WHSQWA";
+    const url = `https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&results=1`;
+
+    function toggleView() {
+      document.getElementById("dashboard").style.display = "block";
+      document.getElementById("graphSection").style.display = "none";
+      document.getElementById("chart").innerHTML = "";
+    }
+
+
+// 📌 Plugin personalizado para mostrar la leyenda (hora/valor) al mover el cursor en uPlot
+function customLegendSyncPlugin() {
+  return {
+    hooks: {
+      setCursor: [
+        u => {
+          const idx = u.cursor.idx;
+          if (idx == null) return;
+
+          const ts = u.data[0][idx];
+          const val = u.data[1][idx];
+
+          const d = new Date(ts);
+          const madridTime = d.toLocaleTimeString("es-ES", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+            timeZone: "Europe/Madrid"
+          });
+
+          document.getElementById("legend-time").textContent = madridTime;
+          document.getElementById("legend-value").textContent = (val != null ? val.toFixed(1) : "--");
+        }
+      ]
+    }
+  };
+}
+
+
+function renderChart(field) {
+  const type = fieldInfo[field];
+  if (!type) return;
+
+  const now = new Date();
+  const endTime = now.toISOString();
+  const startTime = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const dataURL = `https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&start=${startTime}&end=${endTime}`;
+
+  fetch(dataURL)
+    .then(res => res.json())
+    .then(json => {
+      const feeds = json.feeds;
+      const timestamps = feeds.map(f => new Date(f.created_at).getTime());
+      const values = feeds.map(f => parseFloat(f[field])).map(v => isNaN(v) ? null : v);
+
+      const start = timestamps[0];
+      const end = timestamps[timestamps.length - 1];
+      const span = end - start;
+      const MAX_SPAN = 24 * 60 * 60 * 1000;
+
+      const opts = {
+        width: document.getElementById("chart").clientWidth,
+        height: 400,
+        background: "#ffffff",
+        axes: [
+          {
+            stroke: "#000",
+            grid: { show: true },
+            values: (u, ticks) => ticks.map(t => {
+              const d = new Date(t);
+              return d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", hour12: false });
+            })
+          },
+          { stroke: "#000", grid: { show: true } }
+        ],
+        scales: {
+          x: {
+            time: true,
+            auto: false,
+            min: span > MAX_SPAN ? end - MAX_SPAN : start,
+            max: end
+          },
+          y: { auto: true }
+        },
+        plugins: [customLegendSyncPlugin()],
+series: [
+          {},
+          { stroke: type.color, width: 2 }
+        ],
+        
+        cursor: {
+          drag: { x: false, y: false, setScale: false },
+          focus: { prox: 30 },
+          y: true,
+          x: true,
+          
+          data: (u, seriesIdx, idx) => {
+            const date = new Date(u.data[0][idx]);
+            const timeStr = date.toLocaleTimeString("es-ES", {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+              timeZone: "Europe/Madrid"
+            });
+            const value = u.data[seriesIdx][idx];
+            return "Hora: " + timeStr + " | Valor: " + (value != null ? value.toFixed(1) : "--");
+          }
+        },
+        
+        hooks: {
+ready: [
+    u => {
+      u.over.addEventListener("wheel", e => {
+        e.preventDefault();
+
+        const currentRange = u.scales.x.max - u.scales.x.min;
+        if (e.deltaY > 0 && currentRange >= MAX_SPAN) return;
+
+        const factor = e.deltaY < 0 ? 0.9 : 1.1;
+        const mouse = u.posToVal(e.offsetX, "x");
+        let min = mouse - (mouse - u.scales.x.min) * factor;
+        let max = mouse + (u.scales.x.max - mouse) * factor;
+
+        if ((max - min) > MAX_SPAN) {
+          const mid = (min + max) / 2;
+          min = mid - MAX_SPAN / 2;
+          max = mid + MAX_SPAN / 2;
+        }
+
+        u.setScale("x", { min, max });
+      });
+
+      let lastX;
+      u.over.addEventListener("mousedown", function(e) {
+        lastX = e.clientX;
+
+        function move(ev) {
+          const dx = ev.clientX - lastX;
+          lastX = ev.clientX;
+          const range = u.scales.x.max - u.scales.x.min;
+          const shift = dx / u.width * range;
+
+          const fullMin = u.data[0][0];
+          const fullMax = u.data[0][u.data[0].length - 1] + 60 * 60 * 1000;
+
+          let newMin = u.scales.x.min - shift;
+          let newMax = u.scales.x.max - shift;
+
+          if (newMin < fullMin) {
+            newMin = fullMin;
+            newMax = fullMin + range;
+          }
+
+          if (newMax > fullMax) {
+            newMax = fullMax;
+            newMin = fullMax - range;
+          }
+
+          u.setScale("x", { min: newMin, max: newMax });
+        }
+
+        function up() {
+          document.removeEventListener("mousemove", move);
+          document.removeEventListener("mouseup", up);
+        }
+
+        document.addEventListener("mousemove", move);
+        document.addEventListener("mouseup", up);
+      });
+
+      // Touch pan
+      let touchStartX = null;
+      let lastTouchX = null;
+
+      u.over.addEventListener("touchstart", function(e) {
+        if (e.touches.length === 1) {
+          touchStartX = e.touches[0].clientX;
+          lastTouchX = touchStartX;
+        }
+      }, { passive: true });
+
+      u.over.addEventListener("touchmove", function(e) {
+        if (e.touches.length === 1) {
+          const currentX = e.touches[0].clientX;
+          const dx = currentX - lastTouchX;
+          lastTouchX = currentX;
+          const range = u.scales.x.max - u.scales.x.min;
+          const shift = dx / u.width * range;
+
+          const fullMin = u.data[0][0];
+          const fullMax = u.data[0][u.data[0].length - 1] + 60 * 60 * 1000;
+
+          let newMin = u.scales.x.min - shift;
+          let newMax = u.scales.x.max - shift;
+
+          if (newMin < fullMin) {
+            newMin = fullMin;
+            newMax = fullMin + range;
+          }
+
+          if (newMax > fullMax) {
+            newMax = fullMax;
+            newMin = fullMax - range;
+          }
+
+          u.setScale("x", { min: newMin, max: newMax });
+        }
+      }, { passive: true });
+
+      // Touch pinch zoom
+      u.over.addEventListener("touchmove", function(e) {
+        if (e.touches.length === 2) {
+          e.preventDefault();
+          const touch1 = e.touches[0].clientX;
+          const touch2 = e.touches[1].clientX;
+          const currentDist = Math.abs(touch1 - touch2);
+
+          if (typeof u.lastTouchDist === 'number') {
+            const factor = u.lastTouchDist / currentDist;
+            const mouse = (touch1 + touch2) / 2;
+            const valAtMid = u.posToVal(mouse, "x");
+
+            let min = valAtMid - (valAtMid - u.scales.x.min) * factor;
+            let max = valAtMid + (u.scales.x.max - valAtMid) * factor;
+
+            if ((max - min) > MAX_SPAN) {
+              const mid = (min + max) / 2;
+              min = mid - MAX_SPAN / 2;
+              max = mid + MAX_SPAN / 2;
+            }
+
+            u.setScale("x", { min, max });
+          }
+
+          u.lastTouchDist = currentDist;
+        }
+      }, { passive: false });
+
+      u.over.addEventListener("touchend", () => {
+        u.lastTouchDist = null;
+      }, { passive: true });
+    }
+  ]
+}
+      };
+
+      document.getElementById("dashboard").style.display = "none";
+document.getElementById("graphSection").style.display = "block";
+
+      if (window.currentPlot) {
+        currentPlot.destroy();
+        document.getElementById("chart").innerHTML = "";
+      }
+      window.currentPlot = new uPlot(opts, [timestamps, values], document.getElementById("chart"));
+      currentPlot.setSize({width: document.getElementById("chart").clientWidth, height: 400});
+
+      // Actualizar leyenda personalizada con última hora y valor
+      const lastTime = new Date(timestamps[timestamps.length - 1]);
+      const lastVal = values[values.length - 1];
+
+      const horaStr = lastTime.toLocaleTimeString("es-ES", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "Europe/Madrid"
+      });
+
+      const legendText = `Hora: ${horaStr} | Valor: ${lastVal !== null ? lastVal.toFixed(1) : "--"}`;
+      const customLegend = document.getElementById("custom-data-legend");
+      if (customLegend) customLegend.textContent = legendText;
+
+    
+      document.getElementById("tituloGraficaExterior").innerText = "Gráfica: " + type.label;
+
+      const updatedTime = new Date().toLocaleString("es-ES", {
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+        day: "2-digit", month: "2-digit", year: "numeric",
+        timeZone: "Europe/Madrid"
+      });
+      const updateSpan = document.getElementById("last-graph-update");
+      if (updateSpan) updateSpan.textContent = updatedTime;
+
+      document.getElementById("dashboard").style.display = "none";
+      document.getElementById("graphSection").style.display = "block";
+    });
+}
+
+
+    document.querySelectorAll(".card").forEach(card => {
+      card.addEventListener("click", () => {
+        const field = card.getAttribute("data-field");
+        document.querySelectorAll(".card").forEach(c => c.classList.remove("clicked"));
+        card.classList.add("clicked");
+        renderChart(field);
+      });
+    });
+
+    
+function updateForecast(tempsRaw, humsRaw, presRaw, ext) {
+  const clean = arr => arr.filter(v => !isNaN(v) && v > -100 && v < 1000);
+  const avg = arr => {
+    const cleaned = clean(arr);
+    return cleaned.length ? cleaned.reduce((a, b) => a + b, 0) / cleaned.length : NaN;
+  };
+
+  const temps = clean(tempsRaw);
+  const hums = clean(humsRaw);
+  const pres = clean(presRaw);
+    const lastValidPressure = pres.slice().reverse().find(p => !isNaN(p));
+  const pres24h = pres.slice(-288).filter(p => !isNaN(p));
+
+  const nowP = pres.slice(-60);
+  const earlierP = pres.slice(-120, -60);
+
+  let avgNowP = NaN;
+  let avgEarlierP = NaN;
+  let diffP = 0;
+
+  if (nowP.length > 10 && earlierP.length > 10) {
+    avgNowP = avg(nowP);
+    avgEarlierP = avg(earlierP);
+    if (!isNaN(avgNowP) && !isNaN(avgEarlierP)) {
+      diffP = avgNowP - avgEarlierP;
+    }
+  }
+
+  const avgTemp = avg(temps.slice(-60));
+  const avgHum = avg(hums.slice(-60));
+
+  let forecastText = '--';
+  let icon = 'fas fa-question';
+
+  const sensorRules = [
+    { cond: avgNowP < 985 && avgTemp <= 2, label: 'Nieve ❄️', icon: 'fas fa-snowflake', priority: 5 },
+    { cond: avgNowP < 990 && avgTemp <= 5, label: 'Granizo 🌨️', icon: 'fas fa-icicles', priority: 4 },
+    { cond: avgTemp < 8 && avgHum > 90 && avgNowP < 1000, label: 'Niebla 🌫️', icon: 'fas fa-smog', priority: 3 },
+    { cond: avgTemp >= 25 && avgHum <= 35 && avgNowP > 1010, label: 'Calor seco 🔥', icon: 'fas fa-temperature-high', priority: 3 },
+    { cond: avgHum >= 85 && avgNowP > 1015, label: 'Bochorno 🥵', icon: 'fas fa-water', priority: 2 },
+    { cond: avgNowP > 1015 && avgHum < 75, label: 'Estable / Despejado ☀️', icon: 'fas fa-sun', priority: 2 },
+    { cond: diffP > 1.5 && avgNowP > 1010, label: 'Despejado ☀️', icon: 'fas fa-sun', priority: 1 },
+    { cond: diffP < -1.5 && avgNowP < 1000, label: 'Lluvia 🌧️', icon: 'fas fa-cloud-showers-heavy', priority: 4 },
+    { cond: avgNowP >= 1000 && avgNowP <= 1010 && avgHum >= 60, label: 'Cubierto ☁️', icon: 'fas fa-cloud', priority: 2 }
+  ];
+
+  const trendRules = [];
+
+
+
+  if (pres24h.length > 180 && lastValidPressure !== undefined) {
+    const avg24hP = avg(pres24h);
+    const trendP = lastValidPressure - avg24hP;
+
+    if (trendP < -1.5) {
+      trendRules.push({ cond: true, label: 'Tendencia: Caída de presión 🌧️', icon: 'fas fa-arrow-down', priority: 6 });
+    } else if (trendP > 1.5) {
+      trendRules.push({ cond: true, label: 'Tendencia: Subida de presión ☀️', icon: 'fas fa-arrow-up', priority: 6 });
+    }
+
+    const suddenDropPrev = pres.slice(-24, -12);
+    const suddenDropNow = pres.slice(-12);
+
+    if (suddenDropPrev.length >= 10 && suddenDropNow.length >= 10) {
+      const drop = avg(suddenDropPrev) - avg(suddenDropNow);
+      const PRESSURE_DROP_THRESHOLD = 3;
+
+      if (drop >= PRESSURE_DROP_THRESHOLD) {
+        trendRules.push({
+          cond: true,
+          label: 'Caída brusca de presión 🌩️',
+          icon: 'fas fa-bolt',
+          priority: 6
+        });
+      }
+    }
+  }
+
+  const externalRules = [];
+  if (ext) {
+    if (ext.main === "Clear") {
+      externalRules.push({ cond: true, label: 'Despejado ☀️', icon: 'fas fa-sun', priority: 5 });
+    }
+    if (ext.main === "Rain") {
+      externalRules.push({ cond: true, label: 'Lluvia 🌧️', icon: 'fas fa-cloud-showers-heavy', priority: 5 });
+    }
+    if (ext.main === "Clouds" && ext.humidity > 70) {
+      externalRules.push({ cond: true, label: 'Nublado ☁️', icon: 'fas fa-cloud', priority: 5 });
+    }
+  }
+
+  const allRules = [...sensorRules, ...trendRules, ...externalRules];
+  const result = allRules.filter(r => r.cond).sort((a, b) => b.priority - a.priority)[0];
+
+  if (result) {
+    forecastText = result.label;
+    icon = result.icon;
+  } else {
+    forecastText = 'Variable 🌤️';
+    icon = 'fas fa-cloud-sun';
+  }
+
+  document.getElementById('forecast').textContent = forecastText;
+  document.getElementById('forecastIcon').className = icon;
+
+  let sensorPrediction = null;
+  let externalPrediction = null;
+
+  const internalRules = [...sensorRules, ...trendRules];
+  if (internalRules.length > 0) {
+    sensorPrediction = internalRules.sort((a, b) => b.priority - a.priority)[0]?.label;
+  }
+  if (externalRules.length > 0) {
+    externalPrediction = externalRules[0]?.label;
+  }
+
+  let confidence = "🤝 Coincidencia media";
+
+  if (sensorPrediction && externalPrediction) {
+    if (sensorPrediction === externalPrediction) {
+      confidence = "✅ Alta concordancia";
+    } else {
+      confidence = "⚠️ Pronóstico mixto";
+    }
+  }
+
+  document.getElementById('forecastConfidence').textContent = confidence;
+}
+
+
+
+    // Cargar datos principales
+    
+function fetchExternalForecast(callback) {
+  console.log("📡 Intentando obtener datos de OpenWeatherMap...");
+
+  fetch('https://api.openweathermap.org/data/2.5/weather?lat=40.4168&lon=-3.7038&appid=7f897dc14960f59d1b137734d8133e70&units=metric&lang=es')
+    .then(res => {
+      console.log("🔍 Respuesta recibida de OpenWeatherMap:", res.status);
+      if (!res.ok) {
+        throw new Error('Respuesta no OK. Código HTTP: ' + res.status);
+      }
+      return res.json();
+    })
+    .then(data => {
+      console.log("🌤️ Datos externos recibidos:", data);
+      const extForecast = {
+        description: data.weather[0].description,
+        main: data.weather[0].main,
+        icon: data.weather[0].icon,
+        temp: data.main.temp,
+        humidity: data.main.humidity,
+        pressure: data.main.pressure
+      };
+      callback(extForecast);
+    })
+    .catch(err => {
+      console.error('❌ Error al obtener datos de OpenWeatherMap:', err);
+      callback(null);
+    });
+}
+
+function actualizarDashboard() {
+      fetch(url)
+        .then(res => res.json())
+        .then(json => {
+          const ultima = json.feeds[0];
+          if (!ultima) return;
+          for (let i = 1; i <= 7; i++) {
+            const el = document.getElementById("val-field" + i);
+            const val = parseFloat(ultima["field" + i]);
+            if (el && !isNaN(val)) el.textContent = val.toFixed(1);
+          }
+		   const voltaje = parseFloat(ultima.field8);
+        const voltEl = document.getElementById("voltaje-field7");
+        if (voltEl && !isNaN(voltaje)) {
+            voltEl.textContent = voltaje.toFixed(2) + " V";
+        }
+          const lastUpdate = new Date(ultima.created_at).toLocaleString("es-ES", {
+            hour: "2-digit", minute: "2-digit", second: "2-digit",
+            day: "2-digit", month: "2-digit", year: "numeric",
+            timeZone: "Europe/Madrid"
+          });
+          document.getElementById("last-update-time").textContent = lastUpdate;
+          // Obtener datos históricos para pronóstico
+          fetch(`https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&results=1440`)
+            .then(res => res.json())
+            .then(full => {
+              const feeds = full.feeds;
+              const temps = feeds.map(f => parseFloat(f.field1));
+              const hums = feeds.map(f => parseFloat(f.field2));
+              const pres = feeds.map(f => parseFloat(f.field3));
+             // fetchExternalForecast(ext => updateForecast(temps, hums, pres, ext));
+			 updateForecast(temps, hums, pres, lastExternalForecast);
+
+            });
+
+        });
+    }
+
+    actualizarDashboard();
+
+    let currentFieldIndex = 0;
+    const fields = Object.keys(fieldInfo);
+
+    function updateCurrentFieldIndexFromClickedCard() {
+      const clickedCard = document.querySelector(".card.clicked");
+      if (clickedCard) {
+        const field = clickedCard.getAttribute("data-field");
+        const index = fields.indexOf(field);
+        if (index !== -1) {
+          currentFieldIndex = index;
+        }
+      }
+    }
+function actualizarPronosticoExterno() {
+  console.log("📡 Intentando obtener datos de OpenWeatherMap...");
+  fetchExternalForecast(ext => {
+    if (ext) {
+      lastExternalForecast = ext;
+      console.log("✅ Pronóstico externo actualizado");
+
+      // Mostrar hora de actualización externa
+      const horaExt = new Date().toLocaleTimeString("es-ES", {
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+        timeZone: "Europe/Madrid"
+      });
+      const elExt = document.getElementById("external-update-time");
+      if (elExt) elExt.textContent = horaExt;
+    } else {
+      console.warn("⚠️ No se pudo actualizar el pronóstico externo");
+    }
+  });
+}
+
+
+actualizarPronosticoExterno(); // Primera llamada inmediata
+setInterval(actualizarPronosticoExterno, 300000); // Cada 5 minutos (300.000 ms)
+
+
+    document.getElementById("prevGraph").addEventListener("click", () => {
+      updateCurrentFieldIndexFromClickedCard();
+      currentFieldIndex = (currentFieldIndex - 1 + fields.length) % fields.length;
+      const field = fields[currentFieldIndex];
+      renderChart(field);
+      highlightCard(field);
+    });
+
+    document.getElementById("nextGraph").addEventListener("click", () => {
+      updateCurrentFieldIndexFromClickedCard();
+      currentFieldIndex = (currentFieldIndex + 1) % fields.length;
+      const field = fields[currentFieldIndex];
+      renderChart(field);
+      highlightCard(field);
+    });
+
+    document.getElementById("resetZoom").addEventListener("click", () => {
+      const field = fields[currentFieldIndex];
+      renderChart(field);
+    });
+
+    function highlightCard(field) {
+      document.querySelectorAll(".card").forEach(c => c.classList.remove("clicked"));
+      const card = document.querySelector(`.card[data-field="${field}"]`);
+      if (card) card.classList.add("clicked");
+    }
+
+    setInterval(actualizarDashboard, 10000);
+  
+function mostrarResumen() {
+  document.getElementById("dashboard").style.display = "none";
+  document.getElementById("graphSection").style.display = "none";
+  document.getElementById("resumenSection").style.display = "block";
+  document.getElementById("fieldSelectorResumen").selectedIndex = 0;
+  document.getElementById("fieldSelectorResumen").dispatchEvent(new Event("change"));
+}
+
+function volverDesdeResumen() {
+  document.getElementById("dashboard").style.display = "block";
+  document.getElementById("resumenSection").style.display = "none";
+}
+
+document.getElementById("fieldSelectorResumen").addEventListener("change", function () {
+  const field = this.value;
+  const type = fieldInfo[field];
+  if (!type) return;
+
+  const now = new Date();
+  const endTime = now.toISOString();
+  const startTime = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const url = `https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&start=${startTime}&end=${endTime}`;
+
+  fetch(url)
+    .then(res => res.json())
+    .then(json => {
+      const feeds = json.feeds || [];
+      const grouped = {};
+
+      feeds.forEach(feed => {
+        const val = parseFloat((feed[field] || "").replace(",", "."));
+        if (isNaN(val)) return;
+        const dateStr = feed.created_at.substring(0, 10);
+        if (!grouped[dateStr]) grouped[dateStr] = [];
+        grouped[dateStr].push(val);
+      });
+
+      const dates = Object.keys(grouped).sort();
+      const maxVals = dates.map(d => Math.max(...grouped[d]));
+      const minVals = dates.map(d => Math.min(...grouped[d]));
+      const timestamps = dates.map(d => new Date(d).getTime());
+
+      if (window.resumenPlot) {
+        window.resumenPlot.destroy();
+        document.getElementById("chartResumen").innerHTML = "";
+      }
+
+      const opts = {
+        width: document.getElementById("chartResumen").clientWidth,
+        height: 400,
+        background: "#fff",
+        axes: [
+          {
+            stroke: "#000",
+            grid: { show: true },
+            values: (u, ticks) => ticks.map(t => {
+              const d = new Date(t);
+              return d.toLocaleDateString("es-ES", { day: '2-digit', month: '2-digit' });
+            })
+          },
+          { stroke: "#000", grid: { show: true } }
+        ],
+        scales: { x: { time: true }, y: { auto: true } },
+        series: [
+          {},
+          { label: "Máximas", stroke: "#e74c3c", width: 2 },
+          { label: "Mínimas", stroke: "#3498db", width: 2 }
+        ],
+        plugins: [{
+          hooks: {
+            setCursor: [
+              u => {
+                const idx = u.cursor.idx;
+                if (idx == null) return;
+                const ts = u.data[0][idx];
+                const max = u.data[1][idx];
+                const min = u.data[2][idx];
+                const d = new Date(ts);
+                document.getElementById("legendResumen-time").textContent = d.toLocaleDateString("es-ES");
+                document.getElementById("legendResumen-max").textContent = max?.toFixed(1) || "--";
+                document.getElementById("legendResumen-min").textContent = min?.toFixed(1) || "--";
+              }
+            ]
+          }
+        }]
+      };
+
+      window.resumenPlot = new uPlot(opts, [timestamps, maxVals, minVals], document.getElementById("chartResumen"));
+    });
+});
+
+</script>
+</body>
+</html>
